@@ -19,8 +19,8 @@ WiFiWebServer server(80);
 FanController outputFan(fanOutput_SENS_PIN, SENSOR_THRESHOLD1, fanOutput_PWM_PIN);
 FanController inputFan(fanInput_SENS_PIN, SENSOR_THRESHOLD2, fanInput_PWM_PIN);
 
-std::map<std::string, std::vector<int>> data = {};
-unsigned maxTempValues = 5;
+const size_t maxTempValues = 5;
+std::map<std::string, std::vector<float>> data;
 boolean checked = 0;
 int setFanSpeed = 0;
 int fanSpeed = 0;
@@ -34,40 +34,66 @@ bool to_bool(std::string str)
   return b;
 }
 
-int fan_curve(float temp) {
-  int spd = 100 * (temp - FAN_OFF_TEMP) / (FAN_MAX_TEMP - FAN_OFF_TEMP);
-  return min(max(0, spd), 100);
+void add_value(std::vector<float> &vec, float value)
+{
+  if (vec.size() < maxTempValues)
+  {
+    vec.reserve(maxTempValues);
+  }
+  vec.insert(vec.begin(), value);
+  if (vec.size() > maxTempValues)
+  {
+    vec.resize(maxTempValues);
+  }
+};
+
+int fan_curve(float temp)
+{
+  return max(0, 100 * (temp - FAN_OFF_TEMP) / (FAN_MAX_TEMP - FAN_OFF_TEMP));
 }
 
 int calc_PiTemp()
 {
-  int result = 0;
+  float result = 0;
   for (auto const &x : data)
   {
-    result = result + (accumulate(x.second.begin(), x.second.end(), 0.0) / x.second.size());
+    float acc = std::accumulate(std::begin(x.second), std::end(x.second), 0.0);
+    result = result + (acc / maxTempValues);
   }
-  return result / data.size();
+
+  if (data.empty())
+    return 0;
+  return result / (double)data.size();
 }
 
 const char *GetTable()
 {
-  std::string table = "<table style='width:100%'>";
+  static std::string table;
+  table.clear();
+  table.append("<table style='width:100%'>");
   table.append("<tr>");
   table.append("<th scope='col'>&nbsp;</th>");
   for (auto const &x : data)
   {
     table += "<th scope='col'>" + x.first + "</th>";
   }
-  for (int i = 0; i < maxTempValues + 1; ++i)
+  for (size_t i = 0; i < maxTempValues; ++i)
   {
     table.append("</tr><tr>");
     table.append("<th scope='row'>");
     table.append(String(i).c_str());
     table.append("</th>");
-    for (const std::pair<std::string, std::vector<int>> &sv : data)
+    for (auto const &sv : data)
     {
       table.append("<td>");
-      table.append(String(sv.second.at(i)).c_str());
+      if (i < sv.second.size())
+      {
+        table.append(String(sv.second.at(i)).c_str());
+      }
+      else
+      {
+        table.append("-");
+      }
       table.append("</td>");
     }
   }
@@ -77,9 +103,8 @@ const char *GetTable()
 
 void SetFanSpeed(int spd)
 {
-  byte speed = byte(spd);
-  outputFan.setDutyCycle(speed);
-  inputFan.setDutyCycle(speed);
+  outputFan.setDutyCycle(spd);
+  inputFan.setDutyCycle(spd);
   fanSpeed = spd;
 }
 
@@ -105,7 +130,7 @@ void handleNotFound()
 
 void handleRoot()
 {
-#define BUFFER_SIZE 4096
+#define BUFFER_SIZE 8192
 
   char temp[BUFFER_SIZE];
   int sec = millis() / 1000;
@@ -127,6 +152,18 @@ void handleRoot()
         input[type='range'] {\
             vertical-align: middle;\
         }\
+        table {\
+            border-spacing: 0em;\
+            border: 1px solid black;\
+        }\
+        td,\
+        th {\
+            border: 1px solid black;\
+        }\
+        td {\
+            text-align: center;\
+            vertical-align: middle;\
+        }\
     </style>\
 </head>\
 <body>\
@@ -145,7 +182,7 @@ void handleRoot()
         </br>\
         </br>\
         <Label for='output'>setfanspeed: </Label>\
-        <output id='output' name='x' for='range'>%d</output>\
+        <output id='output' name='x'>%d</output>\
         </br>\
         </br>\
         <input type='submit' value='set FanSpeed'>\
@@ -158,7 +195,8 @@ void handleRoot()
     </br>\
     %s\
 </body>\
-</html>", BOARD_NAME, BOARD_NAME, SHIELD_TYPE, day, hr % 24, min % 60, sec % 60, checked ? "checked='checked'" : "", setFanSpeed, setFanSpeed, fanSpeed, GetTable());
+</html>",
+           BOARD_NAME, BOARD_NAME, SHIELD_TYPE, day, hr % 24, min % 60, sec % 60, checked ? "checked='checked'" : "", setFanSpeed, setFanSpeed, fanSpeed, GetTable());
 
   server.send(200, F("text/html"), F(temp));
 }
@@ -168,7 +206,8 @@ void handleAbsoluteFanSpeed()
   if (server.method() == HTTP_POST)
   {
     setFanSpeed = server.arg("speed").toInt();
-    checked = to_bool(server.arg("check").c_str());
+    std::string checkValue = server.arg("check").c_str();
+    checked = to_bool(checkValue);
     server.sendHeader("Location", "/");
     server.send(303, "");
   }
@@ -176,23 +215,28 @@ void handleAbsoluteFanSpeed()
 
 void handleRaspberryTemp()
 {
-  if (server.method() == HTTP_POST)
+  if (server.method() == HTTP_POST && server.hasArg("name") && server.hasArg("temp"))
   {
-    std::string pi = server.arg("pi").c_str();
-    int temp = std::stoi(server.arg("temp").c_str());
-    if (data.count(pi))
+    std::string pi = server.arg("name").c_str();
+    float temp = server.arg("temp").toFloat();
+
+    auto it = data.find(pi);
+    if (it != data.end())
     {
-      data[pi].insert(data[pi].begin(), temp);
-      if (data[pi].size() > maxTempValues)
-      {
-        data[pi].pop_back();
-      }
+      add_value(it->second, temp);
     }
     else
     {
-      data.insert(std::pair<std::string, std::vector<int>>(pi, std::vector<int>()));
-      data[pi].insert(data[pi].begin(), temp);
+      std::vector<float> values;
+      add_value(values, temp);
+      data[pi.c_str()] = values;
     }
+
+    server.send(200, "text/plain", "Data received successfully");
+  }
+  else
+  {
+    server.send(400, "text/plain", "Missing arguments or invalid input");
   }
 }
 
@@ -323,6 +367,7 @@ void loop()
   if (!checked)
   {
     int temp = calc_PiTemp();
+    temp = temp - 30.0;
     int speed = fan_curve(temp);
     SetFanSpeed(speed);
   }
