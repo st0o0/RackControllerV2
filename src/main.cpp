@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <defines.h>
+#include <main.h>
 #include <string>
 #include <map>
 #include <vector>
@@ -52,7 +52,7 @@ int fan_curve(float temp)
   return max(0, 100 * (temp - FAN_OFF_TEMP) / (FAN_MAX_TEMP - FAN_OFF_TEMP));
 }
 
-int calc_PiTemp()
+int calc_temp()
 {
   float result = 0;
   for (auto const &x : data)
@@ -66,7 +66,7 @@ int calc_PiTemp()
   return result / (double)data.size();
 }
 
-const char *GetTable()
+const char *get_table()
 {
   static std::string table;
   table.clear();
@@ -101,14 +101,14 @@ const char *GetTable()
   return table.c_str();
 }
 
-void SetFanSpeed(int spd)
+void set_fanspeed(int spd)
 {
   outputFan.setDutyCycle(spd);
   inputFan.setDutyCycle(spd);
   fanSpeed = spd;
 }
 
-void handleNotFound()
+void handle_notfound()
 {
   String message = F("File Not Found\n\n");
 
@@ -128,7 +128,7 @@ void handleNotFound()
   server.send(404, F("text/plain"), message);
 }
 
-void handleRoot()
+void handle_root()
 {
 #define BUFFER_SIZE 8192
 
@@ -196,12 +196,12 @@ void handleRoot()
     %s\
 </body>\
 </html>",
-           BOARD_NAME, BOARD_NAME, SHIELD_TYPE, day, hr % 24, min % 60, sec % 60, checked ? "checked='checked'" : "", setFanSpeed, setFanSpeed, fanSpeed, GetTable());
+           BOARD_NAME, BOARD_NAME, SHIELD_TYPE, day, hr % 24, min % 60, sec % 60, checked ? "checked='checked'" : "", setFanSpeed, setFanSpeed, fanSpeed, get_table());
 
   server.send(200, F("text/html"), F(temp));
 }
 
-void handleAbsoluteFanSpeed()
+void handle_fanspeed()
 {
   if (server.method() == HTTP_POST)
   {
@@ -213,7 +213,7 @@ void handleAbsoluteFanSpeed()
   }
 }
 
-void handleRaspberryTemp()
+void handle_temp()
 {
   if (server.method() == HTTP_POST && server.hasArg("name") && server.hasArg("temp"))
   {
@@ -240,7 +240,7 @@ void handleRaspberryTemp()
   }
 }
 
-void FanSetup()
+void fan_setup()
 {
   pinMode(fanInput_SENS_PIN, INPUT_PULLUP);
   pinMode(fanOutput_SENS_PIN, INPUT_PULLUP);
@@ -253,39 +253,32 @@ void FanSetup()
 
   inputFan.begin();
   outputFan.begin();
-  SetFanSpeed(10);
+  set_fanspeed(10);
 }
 
-void WiFiSetup()
+void wifi_module_failed()
+{
+  Serial.println();
+  Serial.println(F("Communication with WiFi module failed!"));
+  // don't continue
+  while (true)
+  {
+    delay(1500);
+    Serial.println(F("Communication with WiFi module failed!"));
+  };
+}
+
+void wifi_setup()
 {
   EspSerial.begin(115200);
   WiFi.init(EspSerial);
-}
-
-void InitSetup()
-{
-  Serial.print(F("\nStarting AdvancedWebServer on "));
-  Serial.print(BOARD_NAME);
-  Serial.print(F(" with "));
-  Serial.println(SHIELD_TYPE);
-  Serial.println(WIFI_WEBSERVER_VERSION);
-
-  WiFiSetup();
-
   if (WiFi.status() == WL_NO_MODULE)
   {
-    Serial.println();
-    Serial.println(F("Communication with WiFi module failed!"));
-    // don't continue
-    while (true)
-    {
-      delay(1500);
-      Serial.println(F("Communication with WiFi module failed!"));
-    };
+    wifi_module_failed();
   }
 
   WiFi.sleepMode(WIFI_NONE_SLEEP);
-  WiFi.setHostname("Teensy");
+  WiFi.setHostname("ClusterController");
   WiFi.disconnect();
   WiFi.setPersistent();
   WiFi.endAP(true);
@@ -306,17 +299,6 @@ void InitSetup()
     Serial.println();
     Serial.println(F("Connection to WiFi network failed."));
   }
-
-  FanSetup();
-
-  server.on(F("/"), handleRoot);
-  server.on(F("/setfanspeed"), handleAbsoluteFanSpeed);
-  server.on(F("/pi"), handleRaspberryTemp);
-  server.on(F("/favicon.ico"), []()
-            { server.send(404, F("text/plain"), F("")); });
-
-  server.onNotFound(handleNotFound);
-  server.begin();
 }
 
 void setup()
@@ -324,11 +306,27 @@ void setup()
   Serial.begin(115200);
   delay(200);
 
-  Serial.println(F("startet InitSetup"));
-  InitSetup();
+  Serial.print(F("\nStarting AdvancedWebServer on "));
+  Serial.print(BOARD_NAME);
+  Serial.print(F(" with "));
+  Serial.println(SHIELD_TYPE);
+  Serial.println(WIFI_WEBSERVER_VERSION);
+
+  wifi_setup();
+
+  fan_setup();
+
+  server.on(F("/"), handle_root);
+  server.on(F("/setfanspeed"), handle_fanspeed);
+  server.on(F("/pi"), handle_temp);
+  server.on(F("/favicon.ico"), []()
+            { server.send(404, F("text/plain"), F("")); });
+
+  server.onNotFound(handle_notfound);
+  server.begin();
 }
 
-void heartBeatPrint()
+void heartbeat_print()
 {
   static int num = 1;
 
@@ -354,7 +352,7 @@ void check_status()
   // Send status report every STATUS_REPORT_INTERVAL (60) seconds: we don't need to send updates frequently if there is no status change.
   if ((millis() > checkstatus_timeout) || (checkstatus_timeout == 0))
   {
-    heartBeatPrint();
+    heartbeat_print();
     checkstatus_timeout = millis() + STATUS_CHECK_INTERVAL;
   }
 }
@@ -366,13 +364,12 @@ void loop()
 
   if (!checked)
   {
-    int temp = calc_PiTemp();
-    temp = temp - 30.0;
-    int speed = fan_curve(temp);
-    SetFanSpeed(speed);
+    int temp = calc_temp();
+    int speed = fan_curve(temp - 30.0);
+    set_fanspeed(speed);
   }
   else
   {
-    SetFanSpeed(setFanSpeed);
+    set_fanspeed(setFanSpeed);
   }
 }
