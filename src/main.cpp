@@ -1,13 +1,4 @@
-#include <Arduino.h>
 #include <main.h>
-#include <string>
-#include <map>
-#include <vector>
-#include <numeric>
-#include <sstream>
-#include <iomanip>
-#include <algorithm>
-#include <cctype>
 
 int status = WL_IDLE_STATUS;
 
@@ -15,37 +6,14 @@ const int FAN_OFF_TEMP = 0;
 const int FAN_MAX_TEMP = 15;
 
 WiFiWebServer server(80);
-
-FanController outputFan(fanOutput_SENS_PIN, SENSOR_THRESHOLD1, fanOutput_PWM_PIN);
-FanController inputFan(fanInput_SENS_PIN, SENSOR_THRESHOLD2, fanInput_PWM_PIN);
+fanhandlerconfig config;
+FanHandler fanhandler(config);
 
 const size_t maxTempValues = 5;
 std::map<std::string, std::vector<float>> data;
 boolean checked = 0;
 int setFanSpeed = 0;
 int fanSpeed = 0;
-
-bool to_bool(std::string str)
-{
-  std::transform(str.begin(), str.end(), str.begin(), ::tolower);
-  std::istringstream is(str);
-  bool b;
-  is >> std::boolalpha >> b;
-  return b;
-}
-
-void add_value(std::vector<float> &vec, float value)
-{
-  if (vec.size() < maxTempValues)
-  {
-    vec.reserve(maxTempValues);
-  }
-  vec.insert(vec.begin(), value);
-  if (vec.size() > maxTempValues)
-  {
-    vec.resize(maxTempValues);
-  }
-};
 
 int fan_curve(float temp)
 {
@@ -99,13 +67,6 @@ const char *get_table()
   }
   table.append("</table></br>");
   return table.c_str();
-}
-
-void set_fanspeed(int spd)
-{
-  outputFan.setDutyCycle(spd);
-  inputFan.setDutyCycle(spd);
-  fanSpeed = spd;
 }
 
 void handle_notfound()
@@ -205,6 +166,8 @@ void handle_fanspeed()
 {
   if (server.method() == HTTP_POST)
   {
+
+    server
     setFanSpeed = server.arg("speed").toInt();
     std::string checkValue = server.arg("check").c_str();
     checked = to_bool(checkValue);
@@ -223,12 +186,12 @@ void handle_temp()
     auto it = data.find(pi);
     if (it != data.end())
     {
-      add_value(it->second, temp);
+      add_value(it->second, temp, maxTempValues);
     }
     else
     {
       std::vector<float> values;
-      add_value(values, temp);
+      add_value(values, temp, maxTempValues);
       data[pi.c_str()] = values;
     }
 
@@ -242,18 +205,17 @@ void handle_temp()
 
 void fan_setup()
 {
-  pinMode(fanInput_SENS_PIN, INPUT_PULLUP);
-  pinMode(fanOutput_SENS_PIN, INPUT_PULLUP);
+  pinMode(fanInput_SENS_PIN, INPUT_PULLDOWN);
   pinMode(fanInput_PWM_PIN, OUTPUT);
+  pinMode(fanOutput_SENS_PIN, INPUT_PULLDOWN);
   pinMode(fanOutput_PWM_PIN, OUTPUT);
 
   analogWriteResolution(8);
   analogWriteFrequency(fanOutput_PWM_PIN, 25000);
   analogWriteFrequency(fanInput_PWM_PIN, 25000);
 
-  inputFan.begin();
-  outputFan.begin();
-  set_fanspeed(10);
+  fanhandler.begin();
+  fanhandler.setFanSpeed(10);
 }
 
 void wifi_module_failed()
@@ -283,7 +245,7 @@ void wifi_setup()
   WiFi.setPersistent();
   WiFi.endAP(true);
 
-  status = WiFi.begin(ssid, pass);
+  status = WiFi.begin(ssid, password);
   if (status == WL_CONNECTED)
   {
     WiFi.setAutoConnect(true);
@@ -303,6 +265,19 @@ void wifi_setup()
 
 void setup()
 {
+  fanconfig inconfig;
+  inconfig.pwmPin = fanInput_PWM_PIN;
+  inconfig.sensorPin = fanInput_SENS_PIN;
+  inconfig.sensorThreshold = fanInput_THRESHOLD;
+  fanconfig outconfig;
+  outconfig.pwmPin = fanOutput_PWM_PIN;
+  outconfig.sensorPin = fanOutput_SENS_PIN;
+  outconfig.sensorThreshold = fanOutput_THRESHOLD;
+  fanhandlerconfig config;
+  config.InFan = inconfig;
+  config.OutFan = outconfig;
+  fanhandler = FanHandler(config);
+
   Serial.begin(115200);
   delay(200);
 
@@ -366,10 +341,10 @@ void loop()
   {
     int temp = calc_temp();
     int speed = fan_curve(temp - 30.0);
-    set_fanspeed(speed);
+    fanhandler.setFanSpeed(speed);
   }
   else
   {
-    set_fanspeed(setFanSpeed);
+    fanhandler.setFanSpeed(setFanSpeed);
   }
 }
