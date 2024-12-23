@@ -10,34 +10,22 @@
 /**
    Source: https://stackoverflow.com/a/10990893/1345237
 */
-template <typename T, typename Total, uint16_t N>
-class Moving_Average
-{
-public:
-    void operator()(T sample)
-    {
-        if (num_samples_ < N)
-        {
-            samples_[num_samples_++] = sample;
-            total_ += sample;
-        }
-        else
-        {
-            T &oldest = samples_[num_samples_++ % N];
-            total_ += sample - oldest;
-            oldest = sample;
-        }
-    }
+template <typename T, typename U, std::size_t N>
+struct Moving_Average {
+    T values[N] = {};
+    U average = 0;
 
-    operator double() const
-    {
-        return total_ / min(num_samples_, N);
+    void add(T value) {
+        for (std::size_t i = 1; i < N; ++i) {
+            values[i - 1] = values[i];
+        }
+        values[N - 1] = value;
+        U sum = 0;
+        for (std::size_t i = 0; i < N; ++i) {
+            sum += values[i];
+        }
+        average = sum / N;
     }
-
-private:
-    T samples_[N];
-    uint16_t num_samples_{0};
-    Total total_{0};
 };
 
 #endif

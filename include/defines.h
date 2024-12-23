@@ -7,6 +7,8 @@
 #include <string>
 #include <map>
 #include <vector>
+#include <string>
+#include <list>
 #include <numeric>
 #include <sstream>
 #include <iomanip>

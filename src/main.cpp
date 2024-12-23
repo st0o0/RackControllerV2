@@ -166,8 +166,6 @@ void handle_fanspeed()
 {
   if (server.method() == HTTP_POST)
   {
-
-    server
     setFanSpeed = server.arg("speed").toInt();
     std::string checkValue = server.arg("check").c_str();
     checked = to_bool(checkValue);
