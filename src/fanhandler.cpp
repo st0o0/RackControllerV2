@@ -2,7 +2,16 @@
 
 void FanHandler::begin()
 {
-    
+    fanconfig inFanConfig = config.InFan;
+    fanconfig outFanConfig = config.OutFan;
+    pinMode(inFanConfig.sensorPin, INPUT_PULLDOWN);
+    pinMode(inFanConfig.pwmPin, OUTPUT);
+    pinMode(outFanConfig.sensorPin, INPUT_PULLDOWN);
+    pinMode(outFanConfig.pwmPin, OUTPUT);
+
+    analogWriteResolution(8);
+    analogWriteFrequency(outFanConfig.pwmPin, 25000);
+    analogWriteFrequency(inFanConfig.pwmPin, 25000);
     inputFan.begin();
     outputFan.begin();
 }
@@ -14,7 +23,7 @@ uint FanHandler::getInFanSpeed()
 
 uint FanHandler::getOutFanSpeed()
 {
-    return 9u;
+    return outputFan.getSpeed();
 }
 
 bool FanHandler::setFanSpeed(uint value)

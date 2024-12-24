@@ -1,17 +1,17 @@
-#include <sensorhandler.h>
+#include <devicehandler.h>
 
-std::list<SensorData>::iterator SensorHandler::find(const std::string &device)
+std::list<DeviceData>::iterator DeviceHandler::find(const std::string &name)
 {
     return std::find_if(sensors.begin(), sensors.end(), [&device](const SensorData &sensor)
                         { return sensor.device == device; });
 }
 
-void SensorHandler::add(SensorData data)
+void DeviceHandler::add(DeviceData data)
 {
     sensors.push_back(data);
 }
 
-void SensorHandler::update(SensorData data)
+void DeviceHandler::update(DeviceData data)
 {
     auto it = find(data.device);
     if (it != sensors.end())
@@ -20,25 +20,25 @@ void SensorHandler::update(SensorData data)
     }
 }
 
-bool SensorHandler::exists(const std::string &device)
+bool DeviceHandler::exists(const std::string &name)
 {
     auto it = find(device);
     return it != sensors.end();
 }
 
-std::list<std::string> SensorHandler::getDevices()
+std::list<std::string> DeviceHandler::getDevices()
 {
     std::list<std::string> result;
     return result;
 }
 
-SensorData SensorHandler::getDeviceData(const std::string &device)
+DeviceData DeviceHandler::getDeviceData(const std::string &name)
 {
     auto it = find(device);
     return *it;
 }
 
-float SensorHandler::getAvgTemp()
+float DeviceHandler::getAvgTemp()
 {
     return 123.2;
 }

@@ -5,6 +5,7 @@
 #include <wifi.h>
 #include <helperfunction.h>
 #include <fanhandler.h>
+#include <devicehandler.h>
 
 char ssid[] = "YOUR-SSID";              // your network SSID (name)
 char password[] = "YOUR-PASSWORD"; // your network password

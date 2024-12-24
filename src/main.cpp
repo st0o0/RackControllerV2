@@ -8,17 +8,13 @@ const int FAN_MAX_TEMP = 15;
 WiFiWebServer server(80);
 fanhandlerconfig config;
 FanHandler fanhandler(config);
+DeviceHandler devicehandler;
 
 const size_t maxTempValues = 5;
 std::map<std::string, std::vector<float>> data;
 boolean checked = 0;
 int setFanSpeed = 0;
 int fanSpeed = 0;
-
-int fan_curve(float temp)
-{
-  return max(0, 100 * (temp - FAN_OFF_TEMP) / (FAN_MAX_TEMP - FAN_OFF_TEMP));
-}
 
 int calc_temp()
 {
@@ -203,14 +199,6 @@ void handle_temp()
 
 void fan_setup()
 {
-  pinMode(fanInput_SENS_PIN, INPUT_PULLDOWN);
-  pinMode(fanInput_PWM_PIN, OUTPUT);
-  pinMode(fanOutput_SENS_PIN, INPUT_PULLDOWN);
-  pinMode(fanOutput_PWM_PIN, OUTPUT);
-
-  analogWriteResolution(8);
-  analogWriteFrequency(fanOutput_PWM_PIN, 25000);
-  analogWriteFrequency(fanInput_PWM_PIN, 25000);
 
   fanhandler.begin();
   fanhandler.setFanSpeed(10);
@@ -218,47 +206,10 @@ void fan_setup()
 
 void wifi_module_failed()
 {
-  Serial.println();
-  Serial.println(F("Communication with WiFi module failed!"));
-  // don't continue
-  while (true)
-  {
-    delay(1500);
-    Serial.println(F("Communication with WiFi module failed!"));
-  };
 }
 
 void wifi_setup()
 {
-  EspSerial.begin(115200);
-  WiFi.init(EspSerial);
-  if (WiFi.status() == WL_NO_MODULE)
-  {
-    wifi_module_failed();
-  }
-
-  WiFi.sleepMode(WIFI_NONE_SLEEP);
-  WiFi.setHostname("ClusterController");
-  WiFi.disconnect();
-  WiFi.setPersistent();
-  WiFi.endAP(true);
-
-  status = WiFi.begin(ssid, password);
-  if (status == WL_CONNECTED)
-  {
-    WiFi.setAutoConnect(true);
-    Serial.println();
-    Serial.println(F("Connected to WiFi network."));
-    IPAddress ip = WiFi.localIP();
-    Serial.print("IP Address: ");
-    Serial.println(ip);
-  }
-  else
-  {
-    WiFi.disconnect();
-    Serial.println();
-    Serial.println(F("Connection to WiFi network failed."));
-  }
 }
 
 void setup()
@@ -271,10 +222,10 @@ void setup()
   outconfig.pwmPin = fanOutput_PWM_PIN;
   outconfig.sensorPin = fanOutput_SENS_PIN;
   outconfig.sensorThreshold = fanOutput_THRESHOLD;
-  fanhandlerconfig config;
   config.InFan = inconfig;
   config.OutFan = outconfig;
   fanhandler = FanHandler(config);
+  devicehandler = DeviceHandler();
 
   Serial.begin(115200);
   delay(200);
@@ -299,47 +250,15 @@ void setup()
   server.begin();
 }
 
-void heartbeat_print()
-{
-  static int num = 1;
-
-  Serial.print(F("H"));
-
-  if (num == 80)
-  {
-    Serial.println();
-    num = 1;
-  }
-  else if (num++ % 10 == 0)
-  {
-    Serial.print(F(" "));
-  }
-}
-
-void check_status()
-{
-  static unsigned long checkstatus_timeout = 0;
-
-#define STATUS_CHECK_INTERVAL 60000L
-
-  // Send status report every STATUS_REPORT_INTERVAL (60) seconds: we don't need to send updates frequently if there is no status change.
-  if ((millis() > checkstatus_timeout) || (checkstatus_timeout == 0))
-  {
-    heartbeat_print();
-    checkstatus_timeout = millis() + STATUS_CHECK_INTERVAL;
-  }
-}
-
 void loop()
 {
   server.handleClient();
-  check_status();
 
   if (!checked)
   {
-    int temp = calc_temp();
-    int speed = fan_curve(temp - 30.0);
-    fanhandler.setFanSpeed(speed);
+    // int temp = calc_temp();
+    // int speed = fan_curve(temp - 30.0);
+    // fanhandler.setFanSpeed(20);
   }
   else
   {
