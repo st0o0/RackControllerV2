@@ -7,9 +7,6 @@
 #include <fanhandler.h>
 #include <devicehandler.h>
 
-char ssid[] = "YOUR-SSID";              // your network SSID (name)
-char password[] = "YOUR-PASSWORD"; // your network password
-
 #define fanOutput_PWM_PIN 12
 #define fanOutput_SENS_PIN 27
 #define fanOutput_THRESHOLD 400

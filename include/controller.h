@@ -5,25 +5,24 @@
 #include <devicehandler.h>
 #include <fanhandler.h>
 
-struct controllerconfig
+struct ControllerConfig
 {
     int fan_off_temp;
     int fan_max_temp;
 };
 
-
 class Controller
 {
 private:
-    FanHandler& fanHandler;
-    DeviceHandler& deviceHandler;
+    ControllerConfig config;
+    FanHandler &fanHandler;
+    DeviceHandler &deviceHandler;
     int calc_fancurve(float temp);
 
 public:
-    Controller(FanHandler& fans, DeviceHandler& devices) : fanHandler(fans), deviceHandler(devices) {}
+    Controller(ControllerConfig init_config, FanHandler &fans, DeviceHandler &devices) : fanHandler(fans), deviceHandler(devices), config(init_config) {}
     void begin();
     void handle();
-}
-
+};
 
 #endif

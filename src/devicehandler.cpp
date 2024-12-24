@@ -2,19 +2,19 @@
 
 std::list<DeviceData>::iterator DeviceHandler::find(const std::string &name)
 {
-    return std::find_if(sensors.begin(), sensors.end(), [&device](const SensorData &sensor)
-                        { return sensor.device == device; });
+    return std::find_if(devices.begin(), devices.end(), [&name](const DeviceData &device)
+                        { return device.name == name; });
 }
 
 void DeviceHandler::add(DeviceData data)
 {
-    sensors.push_back(data);
+    devices.push_back(data);
 }
 
 void DeviceHandler::update(DeviceData data)
 {
-    auto it = find(data.device);
-    if (it != sensors.end())
+    auto it = find(data.name);
+    if (it != devices.end())
     {
         *it = data;
     }
@@ -22,8 +22,8 @@ void DeviceHandler::update(DeviceData data)
 
 bool DeviceHandler::exists(const std::string &name)
 {
-    auto it = find(device);
-    return it != sensors.end();
+    auto it = find(name);
+    return it != devices.end();
 }
 
 std::list<std::string> DeviceHandler::getDevices()
@@ -34,7 +34,7 @@ std::list<std::string> DeviceHandler::getDevices()
 
 DeviceData DeviceHandler::getDeviceData(const std::string &name)
 {
-    auto it = find(device);
+    auto it = find(name);
     return *it;
 }
 
